@@ -44,11 +44,28 @@
 
 ## .fillStyle = value
 
-  Set fill style to `value`, a CSS color string, `CanvasGradient`, or `CanvasPattern`.
+  Set fill style to `value`, a CSS color string,
+  `CanvasGradient`, or `CanvasPattern`.
 
 ## .strokeStyle = value
 
-  Set fill style to `value`, a CSS color string, `CanvasGradient`, or `CanvasPattern`.
+  Set fill style to `value`, a CSS color string,
+  `CanvasGradient`, or `CanvasPattern`.
+
+## clearRect(x, y, w, h)
+
+  Clears all pixels on the canvas in the given
+  rectangle to transparent black.
+
+## fillRect(x, y, w, h)
+
+  Paints the given rectangle onto the canvas,
+  using the current fill style.
+
+## strokeRect(x, y, w, h)
+
+  Paints the box that outlines the given rectangle onto the canvas,
+  using the current stroke style.
 
 ## .createLinearGradient(x0, y0, x1, y1)
 
