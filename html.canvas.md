@@ -52,20 +52,38 @@
   Set fill style to `value`, a CSS color string,
   `CanvasGradient`, or `CanvasPattern`.
 
-## clearRect(x, y, w, h)
+## .clearRect(x, y, w, h)
 
   Clears all pixels on the canvas in the given
   rectangle to transparent black.
 
-## fillRect(x, y, w, h)
+## .fillRect(x, y, w, h)
 
   Paints the given rectangle onto the canvas,
   using the current fill style.
 
-## strokeRect(x, y, w, h)
+## .strokeRect(x, y, w, h)
 
   Paints the box that outlines the given rectangle onto the canvas,
   using the current stroke style.
+
+## .measureText(str)
+
+  Return a `TextMetrics` object with the metrics of the given `str`
+  in the _current_ font.
+
+     .width
+     .actualBoundingBoxLeft
+     .actualBoundingBoxRight
+     .fontBoundingBoxAscent
+     .fontBoundingBoxDescent
+     .actualBoundingBoxAscent
+     .actualBoundingBoxDescent
+     .emHeightAscent
+     .emHeightDescent
+     .hangingBaseline
+     .alphabeticBaseline
+     .ideographicBaseline
 
 ## .createLinearGradient(x0, y0, x1, y1)
 
