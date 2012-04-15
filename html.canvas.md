@@ -102,3 +102,6 @@
 
   Add color stop at `offset` with the given `color`.
 
+# More information
+
+  Visit http://www.whatwg.org/specs/web-apps/current-work/multipage/the-canvas-element.html
