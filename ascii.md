@@ -1,5 +1,5 @@
 
-# ASCII characters 0-127
+# ASCII characters 0-127 (dec, hex, desc)
 
   0 `0x00` __NUL (null)__
   1 `0x01` __SOH (start of heading)__
@@ -128,4 +128,4 @@
 124 `0x7c` __|__
 125 `0x7d` __}__
 126 `0x7e` __~__
-127 `0x7f` __undefined__
+127 `0x7f` __DEL (delete)__
