@@ -50,7 +50,7 @@
   __flv__      video/x-flv
   __for__      text/x-fortran
   __gem__      application/octet-stream
-  __gemspec__  text/x-script.ruby
+  __gemspec__  `text/x-script.ruby`
   __gif__      image/gif
   __gz__       application/x-gzip
   __h__        text/x-c
@@ -72,7 +72,7 @@
   __m3u__      audio/x-mpegurl
   __m4v__      video/mp4
   __man__      text/troff
-  __mathml__   application/mathml+xml
+  __mathml__   `application/mathml+xml`
   __mbox__     application/mbox
   __mdoc__     text/troff
   __me__       text/troff
@@ -139,11 +139,11 @@
   __tcl__      application/x-tcl
   __tex__      application/x-tex
   __texi__     application/x-texinfo
-  __texinfo__  application/x-texinfo
+  __texinfo__  `application/x-texinfo`
   __text__     text/plain
   __tif__      image/tiff
   __tiff__     image/tiff
-  __torrent__  application/x-bittorrent
+  __torrent__  `application/x-bittorrent`
   __tr__       text/troff
   __txt__      text/plain
   __vcf__      text/x-vcard
