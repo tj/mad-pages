@@ -33,6 +33,7 @@ NODE = assert \
 node: $(NODE)
 
 $(NODE):
+	@echo "$@ -> node.$@.md"
 	@curl -s https://raw.github.com/joyent/node/master/doc/api/$@.markdown > node.$@.md
 
 .PHONY: node
