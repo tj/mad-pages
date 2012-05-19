@@ -26,7 +26,7 @@ NODE = assert \
 	tls \
 	tty \
 	url \
-	utils \
+	util \
 	vm \
 	zlib
 
