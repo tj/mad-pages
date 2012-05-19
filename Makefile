@@ -30,3 +30,9 @@ NODE = assert \
 	vm \
 	zlib
 
+node: $(NODE)
+
+$(NODE):
+	@curl -s https://raw.github.com/joyent/node/master/doc/api/$@.markdown > node.$@.md
+
+.PHONY: node
