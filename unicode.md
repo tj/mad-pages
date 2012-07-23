@@ -1,0 +1,11 @@
+
+# Useful unicode chars
+
+  ⊘
+  ✓
+  ✔
+  ✕
+  ✖
+  ✗
+  ✘
+
