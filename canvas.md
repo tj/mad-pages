@@ -67,6 +67,10 @@
   Paints the box that outlines the given rectangle onto the canvas,
   using the current stroke style.
 
+## .arc(x, y, radius, startAngle, endAngle, anticlockwise)
+
+  Add an arc path with the given `radius`, `startAngle` and `endAngle`.
+
 ## .measureText(str)
 
   Return a `TextMetrics` object with the metrics of the given `str`
