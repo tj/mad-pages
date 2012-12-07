@@ -63,7 +63,7 @@
   x - delete current character
   X - delete previous character
   D - delete from cursor to end of line
-  yy - yank (copy) a line
+  yy - yank (copy) a line (yy p to duplicate)
   2yy - yank 2 lines
   yw - yank word
   y$ - yank to end of line
