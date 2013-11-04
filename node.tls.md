@@ -49,13 +49,13 @@ server-side resources, which makes it a potential vector for denial-of-service
 attacks.
 
 To mitigate this, renegotiations are limited to three times every 10 minutes. An
-error is emitted on the [CleartextStream](#tls.CleartextStream) instance when
-the threshold is exceeded. The limits are configurable:
+error is emitted on the [tls.TLSSocket][] instance when the threshold is
+exceeded. The limits are configurable:
 
   - `tls.CLIENT_RENEG_LIMIT`: renegotiation limit, default is 3.
 
   - `tls.CLIENT_RENEG_WINDOW`: renegotiation window in seconds, default is
-                               10 minutes.
+    10 minutes.
 
 Don't change the defaults unless you know what you are doing.
 
@@ -76,12 +76,21 @@ handshake extensions allowing you:
     certificates.
 
 
+## tls.getCiphers()
+
+Returns an array with the names of the supported SSL ciphers.
+
+Example:
+
+    var ciphers = tls.getCiphers();
+    console.log(ciphers); // ['AES128-SHA', 'AES256-SHA', ...]
+
+
 ## tls.createServer(options, [secureConnectionListener])
 
-Creates a new [tls.Server](#tls.Server).
-The `connectionListener` argument is automatically set as a listener for the
-[secureConnection](#event_secureConnection_) event.
-The `options` object has these possibilities:
+Creates a new [tls.Server][].  The `connectionListener` argument is
+automatically set as a listener for the [secureConnection][] event.  The
+`options` object has these possibilities:
 
   - `pfx`: A string or `Buffer` containing the private key, certificate and
     CA certs of the server in PFX or PKCS12 format. (Mutually exclusive with
@@ -95,31 +104,57 @@ The `options` object has these possibilities:
   - `cert`: A string or `Buffer` containing the certificate key of the server in
     PEM format. (Required)
 
-  - `ca`: An array of strings or `Buffer`s of trusted certificates. If this is
-    omitted several well known "root" CAs will be used, like VeriSign.
-    These are used to authorize connections.
+  - `ca`: An array of strings or `Buffer`s of trusted certificates in PEM
+    format. If this is omitted several well known "root" CAs will be used,
+    like VeriSign. These are used to authorize connections.
 
   - `crl` : Either a string or list of strings of PEM encoded CRLs (Certificate
     Revocation List)
 
-  - `ciphers`: A string describing the ciphers to use or exclude. Consult
-    <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT> for
-    details on the format.
-    To mitigate [BEAST attacks]
-    (http://blog.ivanristic.com/2011/10/mitigating-the-beast-attack-on-tls.html),
-    it is recommended that you use this option in conjunction with the
-    `honorCipherOrder` option described below to prioritize the RC4 algorithm,
-    since it is a non-CBC cipher. A recommended cipher list follows:
-    `ECDHE-RSA-AES256-SHA:AES256-SHA:RC4-SHA:RC4:HIGH:!MD5:!aNULL:!EDH:!AESGCM`
+  - `ciphers`: A string describing the ciphers to use or exclude.
 
-  - `honorCipherOrder` :
-	When choosing a cipher, use the server's preferences instead of the client
-	preferences.
-	Note that if SSLv2 is used, the server will send its list of preferences
-	to the client, and the client chooses the cipher.
-	Although, this option is disabled by default, it is *recommended* that you
-	use this option in conjunction with the `ciphers` option to mitigate
-	BEAST attacks.
+    To mitigate [BEAST attacks] it is recommended that you use this option in
+    conjunction with the `honorCipherOrder` option described below to
+    prioritize the non-CBC cipher.
+
+    Defaults to `ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH`.
+    Consult the [OpenSSL cipher list format documentation] for details on the
+    format.
+
+
+    `AES128-GCM-SHA256` is used when node.js is linked against OpenSSL 1.0.1
+    or newer and the client speaks TLS 1.2, RC4 is used as a secure fallback.
+
+    **NOTE**: Previous revisions of this section suggested `AES256-SHA` as an
+    acceptable cipher. Unfortunately, `AES256-SHA` is a CBC cipher and therefore
+    susceptible to BEAST attacks. Do *not* use it.
+
+  - `ecdhCurve`: A string describing a named curve to use for ECDH ciphers or
+    false to disable all ECDH ciphers.
+
+    This is required to support ECDH (Elliptic Curve Diffie-Hellman) ciphers.
+    ECDH ciphers are a newer alternative to RSA. The advantages of ECDH over
+    RSA is that it offers [Forward secrecy]. Forward secrecy means that for an
+    attacker it won't be possible to decrypt your previous data exchanges if
+    they get access to your private key.
+
+    Defaults to `prime256v1`. Consult [RFC 4492] for more details.
+
+  - `handshakeTimeout`: Abort the connection if the SSL/TLS handshake does not
+    finish in this many milliseconds. The default is 120 seconds.
+
+    A `'clientError'` is emitted on the `tls.Server` object whenever a handshake
+    times out.
+
+  - `honorCipherOrder` : When choosing a cipher, use the server's preferences
+    instead of the client preferences.
+
+    Note that if SSLv2 is used, the server will send its list of preferences
+    to the client, and the client chooses the cipher.
+
+    Although, this option is disabled by default, it is *recommended* that you
+    use this option in conjunction with the `ciphers` option to mitigate
+    BEAST attacks.
 
   - `requestCert`: If `true` the server will request a certificate from
     clients that connect and attempt to verify that certificate. Default:
@@ -132,16 +167,25 @@ The `options` object has these possibilities:
   - `NPNProtocols`: An array or `Buffer` of possible NPN protocols. (Protocols
     should be ordered by their priority).
 
-  - `SNICallback`: A function that will be called if client supports SNI TLS
-    extension. Only one argument will be passed to it: `servername`. And
-    `SNICallback` should return SecureContext instance.
+  - `SNICallback(servername, cb)`: A function that will be called if client
+    supports SNI TLS extension. Two argument will be passed to it: `servername`,
+    and `cb`. `SNICallback` should invoke `cb(null, ctx)`, where `ctx` is a
+    SecureContext instance.
     (You can use `crypto.createCredentials(...).context` to get proper
     SecureContext). If `SNICallback` wasn't provided - default callback with
     high-level API will be used (see below).
 
+  - `sessionTimeout`: An integer specifying the seconds after which TLS
+    session identifiers and TLS session tickets created by the server are
+    timed out. See [SSL_CTX_set_timeout] for more details.
+
   - `sessionIdContext`: A string containing a opaque identifier for session
     resumption. If `requestCert` is `true`, the default is MD5 hash value
     generated from command-line. Otherwise, the default is not provided.
+
+  - `secureProtocol`: The SSL method to use, e.g. `SSLv3_method` to force
+    SSL version 3. The possible values depend on your installation of
+    OpenSSL and are defined in the constant [SSL_METHODS][].
 
 Here is a simple example echo server:
 
@@ -159,12 +203,12 @@ Here is a simple example echo server:
       ca: [ fs.readFileSync('client-cert.pem') ]
     };
 
-    var server = tls.createServer(options, function(cleartextStream) {
+    var server = tls.createServer(options, function(socket) {
       console.log('server connected',
-                  cleartextStream.authorized ? 'authorized' : 'unauthorized');
-      cleartextStream.write("welcome!\n");
-      cleartextStream.setEncoding('utf8');
-      cleartextStream.pipe(cleartextStream);
+                  socket.authorized ? 'authorized' : 'unauthorized');
+      socket.write("welcome!\n");
+      socket.setEncoding('utf8');
+      socket.pipe(socket);
     });
     server.listen(8000, function() {
       console.log('server bound');
@@ -183,12 +227,12 @@ Or
 
     };
 
-    var server = tls.createServer(options, function(cleartextStream) {
+    var server = tls.createServer(options, function(socket) {
       console.log('server connected',
-                  cleartextStream.authorized ? 'authorized' : 'unauthorized');
-      cleartextStream.write("welcome!\n");
-      cleartextStream.setEncoding('utf8');
-      cleartextStream.pipe(cleartextStream);
+                  socket.authorized ? 'authorized' : 'unauthorized');
+      socket.write("welcome!\n");
+      socket.setEncoding('utf8');
+      socket.pipe(socket);
     });
     server.listen(8000, function() {
       console.log('server bound');
@@ -199,8 +243,8 @@ You can test this server by connecting to it with `openssl s_client`:
     openssl s_client -connect 127.0.0.1:8000
 
 
-## tls.connect(options, [secureConnectListener])
-## tls.connect(port, [host], [options], [secureConnectListener])
+## tls.connect(options, [callback])
+## tls.connect(port, [host], [options], [callback])
 
 Creates a new client connection to the given `port` and `host` (old API) or
 `options.port` and `options.host`. (If `host` is omitted, it defaults to
@@ -225,25 +269,29 @@ Creates a new client connection to the given `port` and `host` (old API) or
   - `cert`: A string or `Buffer` containing the certificate key of the client in
     PEM format.
 
-  - `ca`: An array of strings or `Buffer`s of trusted certificates. If this is
-    omitted several well known "root" CAs will be used, like VeriSign.
-    These are used to authorize connections.
+  - `ca`: An array of strings or `Buffer`s of trusted certificates in PEM
+    format. If this is omitted several well known "root" CAs will be used,
+    like VeriSign. These are used to authorize connections.
 
   - `rejectUnauthorized`: If `true`, the server certificate is verified against
     the list of supplied CAs. An `'error'` event is emitted if verification
-    fails. Default: `false`.
+    fails. Default: `true`.
 
-  - `NPNProtocols`: An array of string or `Buffer` containing supported NPN
-    protocols. `Buffer` should have following format: `0x05hello0x05world`,
+  - `NPNProtocols`: An array of strings or `Buffer`s containing supported NPN
+    protocols. `Buffer`s should have following format: `0x05hello0x05world`,
     where first byte is next protocol name's length. (Passing array should
     usually be much simpler: `['hello', 'world']`.)
 
   - `servername`: Servername for SNI (Server Name Indication) TLS extension.
 
-The `secureConnectListener` parameter will be added as a listener for the
-['secureConnect'](#event_secureConnect_) event.
+  - `secureProtocol`: The SSL method to use, e.g. `SSLv3_method` to force
+    SSL version 3. The possible values depend on your installation of
+    OpenSSL and are defined in the constant [SSL_METHODS][].
 
-`tls.connect()` returns a [CleartextStream](#tls.CleartextStream) object.
+The `callback` parameter will be added as a listener for the
+['secureConnect'][] event.
+
+`tls.connect()` returns a [tls.TLSSocket][] object.
 
 Here is an example of a client of echo server as described previously:
 
@@ -259,17 +307,17 @@ Here is an example of a client of echo server as described previously:
       ca: [ fs.readFileSync('server-cert.pem') ]
     };
 
-    var cleartextStream = tls.connect(8000, options, function() {
+    var socket = tls.connect(8000, options, function() {
       console.log('client connected',
-                  cleartextStream.authorized ? 'authorized' : 'unauthorized');
-      process.stdin.pipe(cleartextStream);
+                  socket.authorized ? 'authorized' : 'unauthorized');
+      process.stdin.pipe(socket);
       process.stdin.resume();
     });
-    cleartextStream.setEncoding('utf8');
-    cleartextStream.on('data', function(data) {
+    socket.setEncoding('utf8');
+    socket.on('data', function(data) {
       console.log(data);
     });
-    cleartextStream.on('end', function() {
+    socket.on('end', function() {
       server.close();
     });
 
@@ -282,21 +330,51 @@ Or
       pfx: fs.readFileSync('client.pfx')
     };
 
-    var cleartextStream = tls.connect(8000, options, function() {
+    var socket = tls.connect(8000, options, function() {
       console.log('client connected',
-                  cleartextStream.authorized ? 'authorized' : 'unauthorized');
-      process.stdin.pipe(cleartextStream);
+                  socket.authorized ? 'authorized' : 'unauthorized');
+      process.stdin.pipe(socket);
       process.stdin.resume();
     });
-    cleartextStream.setEncoding('utf8');
-    cleartextStream.on('data', function(data) {
+    socket.setEncoding('utf8');
+    socket.on('data', function(data) {
       console.log(data);
     });
-    cleartextStream.on('end', function() {
+    socket.on('end', function() {
       server.close();
     });
 
+## Class: tls.TLSSocket
+
+Wrapper for instance of [net.Socket][], replaces internal socket read/write
+routines to perform transparent encryption/decryption of incoming/outgoing data.
+
+## new tls.TLSSocket(socket, options)
+
+Construct a new TLSSocket object from existing TCP socket.
+
+`socket` is an instance of [net.Socket][]
+
+`options` is an object that might contain following properties:
+
+  - `credentials`: An optional credentials object from
+     `crypto.createCredentials( ... )`
+
+  - `isServer`: If true - TLS socket will be instantiated in server-mode
+
+  - `server`: An optional [net.Server][] instance
+
+  - `requestCert`: Optional, see [tls.createSecurePair][]
+
+  - `rejectUnauthorized`: Optional, see [tls.createSecurePair][]
+
+  - `NPNProtocols`: Optional, see [tls.createServer][]
+
+  - `SNICallback`: Optional, see [tls.createServer][]
+
 ## tls.createSecurePair([credentials], [isServer], [requestCert], [rejectUnauthorized])
+
+    Stability: 0 - Deprecated. Use tls.TLSSocket instead.
 
 Creates a new secure pair object with two streams, one of which reads/writes
 encrypted data, and one reads/writes cleartext data.
@@ -315,8 +393,10 @@ and the cleartext one is used as a replacement for the initial encrypted stream.
    automatically reject clients with invalid certificates. Only applies to
    servers with `requestCert` enabled.
 
-`tls.createSecurePair()` returns a SecurePair object with
-[cleartext](#tls.CleartextStream) and `encrypted` stream properties.
+`tls.createSecurePair()` returns a SecurePair object with `cleartext` and
+`encrypted` stream properties.
+
+NOTE: `cleartext` has the same APIs as [tls.TLSSocket][]
 
 ## Class: SecurePair
 
@@ -339,30 +419,56 @@ connections using TLS or SSL.
 
 ### Event: 'secureConnection'
 
-`function (cleartextStream) {}`
+`function (tlsSocket) {}`
 
 This event is emitted after a new connection has been successfully
-handshaked. The argument is a instance of
-[CleartextStream](#tls.CleartextStream). It has all the common stream methods
-and events.
+handshaked. The argument is a instance of [tls.TLSSocket][]. It has all the
+common stream methods and events.
 
-`cleartextStream.authorized` is a boolean value which indicates if the
+`socket.authorized` is a boolean value which indicates if the
 client has verified by one of the supplied certificate authorities for the
-server. If `cleartextStream.authorized` is false, then
-`cleartextStream.authorizationError` is set to describe how authorization
+server. If `socket.authorized` is false, then
+`socket.authorizationError` is set to describe how authorization
 failed. Implied but worth mentioning: depending on the settings of the TLS
 server, you unauthorized connections may be accepted.
-`cleartextStream.npnProtocol` is a string containing selected NPN protocol.
-`cleartextStream.servername` is a string containing servername requested with
+`socket.npnProtocol` is a string containing selected NPN protocol.
+`socket.servername` is a string containing servername requested with
 SNI.
 
 
 ### Event: 'clientError'
 
-`function (exception) { }`
+`function (exception, tlsSocket) { }`
 
 When a client connection emits an 'error' event before secure connection is
 established - it will be forwarded here.
+
+`tlsSocket` is the [tls.TLSSocket][] that the error originated from.
+
+
+### Event: 'newSession'
+
+`function (sessionId, sessionData) { }`
+
+Emitted on creation of TLS session. May be used to store sessions in external
+storage.
+
+NOTE: adding this event listener will have an effect only on connections
+established after addition of event listener.
+
+
+### Event: 'resumeSession'
+
+`function (sessionId, callback) { }`
+
+Emitted when client wants to resume previous TLS session. Event listener may
+perform lookup in external storage using given `sessionId`, and invoke
+`callback(null, sessionData)` once finished. If session can't be resumed
+(i.e. doesn't exist in storage) one may call `callback(null, null)`. Calling
+`callback(err)` will terminate incoming connection and destroy socket.
+
+NOTE: adding this event listener will have an effect only on connections
+established after addition of event listener.
 
 
 ### server.listen(port, [host], [callback])
@@ -386,8 +492,8 @@ event.
 ### server.address()
 
 Returns the bound address, the address family name and port of the
-server as reported by the operating system.
-See [net.Server.address()](net.html#server.address) for more information.
+server as reported by the operating system.  See [net.Server.address()][] for
+more information.
 
 ### server.addContext(hostname, credentials)
 
@@ -405,37 +511,46 @@ gets high.
 The number of concurrent connections on the server.
 
 
-## Class: tls.CleartextStream
+## Class: CryptoStream
 
-This is a stream on top of the *Encrypted* stream that makes it possible to
-read/write an encrypted data as a cleartext data.
+    Stability: 0 - Deprecated. Use tls.TLSSocket instead.
 
-This instance implements a duplex [Stream](stream.html) interfaces.
-It has all the common stream methods and events.
+This is an encrypted stream.
 
-A ClearTextStream is the `clear` member of a SecurePair object.
+### cryptoStream.bytesWritten
+
+A proxy to the underlying socket's bytesWritten accessor, this will return
+the total bytes written to the socket, *including the TLS overhead*.
+
+## Class: tls.TLSSocket
+
+This is a wrapped version of [net.Socket][] that does transparent encryption
+of written data and all required TLS negotiation.
+
+This instance implements a duplex [Stream][] interfaces.  It has all the
+common stream methods and events.
 
 ### Event: 'secureConnect'
 
-This event is emitted after a new connection has been successfully handshaked. 
+This event is emitted after a new connection has been successfully handshaked.
 The listener will be called no matter if the server's certificate was
-authorized or not. It is up to the user to test `cleartextStream.authorized`
+authorized or not. It is up to the user to test `tlsSocket.authorized`
 to see if the server certificate was signed by one of the specified CAs.
-If `cleartextStream.authorized === false` then the error can be found in
-`cleartextStream.authorizationError`. Also if NPN was used - you can check
-`cleartextStream.npnProtocol` for negotiated protocol.
+If `tlsSocket.authorized === false` then the error can be found in
+`tlsSocket.authorizationError`. Also if NPN was used - you can check
+`tlsSocket.npnProtocol` for negotiated protocol.
 
-### cleartextStream.authorized
+### tlsSocket.authorized
 
 A boolean that is `true` if the peer certificate was signed by one of the
 specified CAs, otherwise `false`
 
-### cleartextStream.authorizationError
+### tlsSocket.authorizationError
 
 The reason why the peer's certificate has not been verified. This property
-becomes available only when `cleartextStream.authorized === false`.
+becomes available only when `tlsSocket.authorized === false`.
 
-### cleartextStream.getPeerCertificate()
+### tlsSocket.getPeerCertificate()
 
 Returns an object representing the peer's certificate. The returned object has
 some properties corresponding to the field of the certificate.
@@ -463,7 +578,7 @@ Example:
 If the peer does not provide a certificate, it returns `null` or an empty
 object.
 
-### cleartextStream.getCipher()
+### tlsSocket.getCipher()
 Returns an object representing the cipher name and the SSL/TLS
 protocol version of the current connection.
 
@@ -474,18 +589,56 @@ See SSL_CIPHER_get_name() and SSL_CIPHER_get_version() in
 http://www.openssl.org/docs/ssl/ssl.html#DEALING_WITH_CIPHERS for more
 information.
 
-### cleartextStream.address()
+### tlsSocket.renegotiate(options, callback)
+
+Initiate TLS renegotiation process. The `options` may contain the following
+fields: `rejectUnauthorized`, `requestCert` (See [tls.createServer][]
+for details). `callback(err)` will be executed with `null` as `err`,
+once the renegotiation is successfully completed.
+
+NOTE: Can be used to request peer's certificate after the secure connection
+has been established.
+
+ANOTHER NOTE: When running as the server, socket will be destroyed
+with an error after `handshakeTimeout` timeout.
+
+### tlsSocket.address()
 
 Returns the bound address, the address family name and port of the
 underlying socket as reported by the operating system. Returns an
 object with three properties, e.g.
 `{ port: 12346, family: 'IPv4', address: '127.0.0.1' }`
 
-### cleartextStream.remoteAddress
+### tlsSocket.remoteAddress
 
 The string representation of the remote IP address. For example,
 `'74.125.127.100'` or `'2001:4860:a005::68'`.
 
-### cleartextStream.remotePort
+### tlsSocket.remotePort
 
 The numeric representation of the remote port. For example, `443`.
+
+### tlsSocket.localAddress
+
+The string representation of the local IP address.
+
+### tlsSocket.localPort
+
+The numeric representation of the local port.
+
+[OpenSSL cipher list format documentation]: http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT
+[BEAST attacks]: http://blog.ivanristic.com/2011/10/mitigating-the-beast-attack-on-tls.html
+[tls.createServer]: #tls_tls_createserver_options_secureconnectionlistener
+[tls.createSecurePair]: #tls_tls_createsecurepair_credentials_isserver_requestcert_rejectunauthorized
+[tls.TLSSocket]: #tls_class_tls_tlssocket
+[net.Server]: net.html#net_class_net_server
+[net.Socket]: net.html#net_class_net_socket
+[net.Server.address()]: net.html#net_server_address
+['secureConnect']: #tls_event_secureconnect
+[secureConnection]: #tls_event_secureconnection
+[Stream]: stream.html#stream_stream
+[SSL_METHODS]: http://www.openssl.org/docs/ssl/ssl.html#DEALING_WITH_PROTOCOL_METHODS
+[tls.Server]: #tls_class_tls_server
+[SSL_CTX_set_timeout]: http://www.openssl.org/docs/ssl/SSL_CTX_set_timeout.html
+[RFC 4492]: http://www.rfc-editor.org/rfc/rfc4492.txt
+[Forward secrecy]: http://en.wikipedia.org/wiki/Perfect_forward_secrecy

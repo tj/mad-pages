@@ -97,7 +97,7 @@ prints the active watchers. To remove a watcher, type
 * `next`, `n` - Step next
 * `step`, `s` - Step in
 * `out`, `o` - Step out
-* `pause` - Pause running code (like pause button in Developer TOols)
+* `pause` - Pause running code (like pause button in Developer Tools)
 
 ### Breakpoints
 
@@ -108,6 +108,30 @@ functions body
 * `setBreakpoint('script.js', 1)`, `sb(...)` - Set breakpoint on first line of
 script.js
 * `clearBreakpoint`, `cb(...)` - Clear breakpoint
+
+It is also possible to set a breakpoint in a file (module) that
+isn't loaded yet:
+
+    % ./node debug test/fixtures/break-in-module/main.js
+    < debugger listening on port 5858
+    connecting to port 5858... ok
+    break in test/fixtures/break-in-module/main.js:1
+      1 var mod = require('./mod.js');
+      2 mod.hello();
+      3 mod.hello();
+    debug> setBreakpoint('mod.js', 23)
+    Warning: script 'mod.js' was not loaded yet.
+      1 var mod = require('./mod.js');
+      2 mod.hello();
+      3 mod.hello();
+    debug> c
+    break in test/fixtures/break-in-module/mod.js:23
+     21
+     22 exports.hello = function() {
+     23   return 'hello from module';
+     24 };
+     25
+    debug>
 
 ### Info
 
@@ -136,3 +160,10 @@ breakpoint)
 The V8 debugger can be enabled and accessed either by starting Node with
 the `--debug` command-line flag or by signaling an existing Node process
 with `SIGUSR1`.
+
+Once a process has been set in debug mode with this it can be connected to
+with the node debugger. Either connect to the `pid` or the URI to the debugger.
+The syntax is:
+
+* `node debug -p <pid>` - Connects to the process via the `pid`
+* `node debug <URI>` - Connects to the process via the URI such as localhost:5858

@@ -3,8 +3,52 @@
 <!-- type=global -->
 
 The `process` object is a global object and can be accessed from anywhere.
-It is an instance of `EventEmitter`.
+It is an instance of [EventEmitter][].
 
+## Exit Codes
+
+Node will normally exit with a `0` status code when no more async
+operations are pending.  The following status codes are used in other
+cases:
+
+* `1` **Uncaught Fatal Exception** - There was an uncaught exception,
+  and it was not handled by a domain or an `uncaughtException` event
+  handler.
+* `2` - Unused (reserved by Bash for builtin misuse)
+* `3` **Internal JavaScript Parse Error** - The JavaScript source code
+  internal in Node's bootstrapping process caused a parse error.  This
+  is extremely rare, and generally can only happen during development
+  of Node itself.
+* `4` **Internal JavaScript Evaluation Failure** - The JavaScript
+  source code internal in Node's bootstrapping process failed to
+  return a function value when evaluated.  This is extremely rare, and
+  generally can only happen during development of Node itself.
+* `5` **Fatal Error** - There was a fatal unrecoverable error in V8.
+  Typically a message will be printed to stderr with the prefix `FATAL
+  ERROR`.
+* `6` **Non-function Internal Exception Handler** - There was an
+  uncaught exception, but the internal fatal exception handler
+  function was somehow set to a non-function, and could not be called.
+* `7` **Internal Exception Handler Run-Time Failure** - There was an
+  uncaught exception, and the internal fatal exception handler
+  function itself threw an error while attempting to handle it.  This
+  can happen, for example, if a `process.on('uncaughtException')` or
+  `domain.on('error')` handler throws an error.
+* `8` - Unused.  In previous versions of Node, exit code 8 sometimes
+  indicated an uncaught exception.
+* `9` - **Invalid Argument** - Either an unknown option was specified,
+  or an option requiring a value was provided without a value.
+* `10` **Internal JavaScript Run-Time Failure** - The JavaScript
+  source code internal in Node's bootstrapping process threw an error
+  when the bootstrapping function was called.  This is extremely rare,
+  and generally can only happen during development of Node itself.
+* `12` **Invalid Debug Argument** - The `--debug` and/or `--debug-brk`
+  options were set, but an invalid port number was chosen.
+* `>128` **Signal Exits** - If Node receives a fatal signal such as
+  `SIGKILL` or `SIGHUP`, then its exit code will be `128` plus the
+  value of the signal code.  This is a standard Unix practice, since
+  exit codes are defined to be 7-bit integers, and signal exits set
+  the high-order bit, and then contain the value of the signal code.
 
 ## Event: 'exit'
 
@@ -15,10 +59,10 @@ timers may not be scheduled.
 
 Example of listening for `exit`:
 
-    process.on('exit', function () {
-      process.nextTick(function () {
-       console.log('This will not run');
-      });
+    process.on('exit', function() {
+      setTimeout(function() {
+        console.log('This will not run');
+      }, 0);
       console.log('About to exit.');
     });
 
@@ -30,11 +74,11 @@ a stack trace and exit) will not occur.
 
 Example of listening for `uncaughtException`:
 
-    process.on('uncaughtException', function (err) {
+    process.on('uncaughtException', function(err) {
       console.log('Caught exception: ' + err);
     });
 
-    setTimeout(function () {
+    setTimeout(function() {
       console.log('This will still run.');
     }, 500);
 
@@ -43,31 +87,42 @@ Example of listening for `uncaughtException`:
     console.log('This will not run.');
 
 Note that `uncaughtException` is a very crude mechanism for exception
-handling.  Using try / catch in your program will give you more control over
-your program's flow.  Especially for server programs that are designed to
-stay running forever, `uncaughtException` can be a useful safety mechanism.
+handling.
 
+Don't use it, use [domains](domain.html) instead. If you do use it, restart
+your application after every unhandled exception!
+
+Do *not* use it as the node.js equivalent of `On Error Resume Next`. An
+unhandled exception means your application - and by extension node.js itself -
+is in an undefined state. Blindly resuming means *anything* could happen.
+
+Think of resuming as pulling the power cord when you are upgrading your system.
+Nine out of ten times nothing happens - but the 10th time, your system is bust.
+
+You have been warned.
 
 ## Signal Events
 
 <!--type=event-->
-<!--name=SIGINT, SIGUSR1, etc.-->
+<!--name=SIGINT, SIGHUP, etc.-->
 
 Emitted when the processes receives a signal. See sigaction(2) for a list of
-standard POSIX signal names such as SIGINT, SIGUSR1, etc.
+standard POSIX signal names such as SIGINT, SIGHUP, etc.
 
 Example of listening for `SIGINT`:
 
     // Start reading from stdin so we don't exit.
     process.stdin.resume();
 
-    process.on('SIGINT', function () {
+    process.on('SIGINT', function() {
       console.log('Got SIGINT.  Press Control-D to exit.');
     });
 
 An easy way to send the `SIGINT` signal is with `Control-C` in most terminal
 programs.
 
+Note: SIGUSR1 is reserved by node.js to kickstart the debugger.  It's possible
+to install a listener but that won't stop the debugger from starting.
 
 ## process.stdout
 
@@ -75,7 +130,7 @@ A `Writable Stream` to `stdout`.
 
 Example: the definition of `console.log`
 
-    console.log = function (d) {
+    console.log = function(d) {
       process.stdout.write(d + '\n');
     };
 
@@ -84,6 +139,20 @@ that writes to them are usually blocking.  They are blocking in the case
 that they refer to regular files or TTY file descriptors. In the case they
 refer to pipes, they are non-blocking like other streams.
 
+To check if Node is being run in a TTY context, read the `isTTY` property
+on `process.stderr`, `process.stdout`, or `process.stdin`:
+
+    $ node -p "Boolean(process.stdin.isTTY)"
+    true
+    $ echo "foo" | node -p "Boolean(process.stdin.isTTY)"
+    false
+
+    $ node -p "Boolean(process.stdout.isTTY)"
+    true
+    $ node -p "Boolean(process.stdout.isTTY)" | cat
+    false
+
+See [the tty docs](tty.html#tty_tty) for more information.
 
 ## process.stderr
 
@@ -105,11 +174,11 @@ Example of opening standard input and listening for both events:
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
 
-    process.stdin.on('data', function (chunk) {
+    process.stdin.on('data', function(chunk) {
       process.stdout.write('data: ' + chunk);
     });
 
-    process.stdin.on('end', function () {
+    process.stdin.on('end', function() {
       process.stdout.write('end');
     });
 
@@ -121,7 +190,7 @@ An array containing the command line arguments.  The first element will be
 next elements will be any additional command line arguments.
 
     // print process.argv
-    process.argv.forEach(function (val, index, array) {
+    process.argv.forEach(function(val, index, array) {
       console.log(index + ': ' + val);
     });
 
@@ -142,6 +211,28 @@ This is the absolute pathname of the executable that started the process.
 Example:
 
     /usr/local/bin/node
+
+
+## process.execArgv
+
+This is the set of node-specific command line options from the
+executable that started the process.  These options do not show up in
+`process.argv`, and do not include the node executable, the name of
+the script, or any options following the script name. These options
+are useful in order to spawn child processes with the same execution
+environment as the parent.
+
+Example:
+
+    $ node --harmony script.js --version
+
+results in process.execArgv:
+
+    ['--harmony']
+
+and process.argv:
+
+    ['/usr/local/bin/node', 'script.js', '--version']
 
 
 ## process.abort()
@@ -188,52 +279,122 @@ To exit with a 'failure' code:
 The shell that executed node should see the exit code as 1.
 
 
+## process.exitCode
+
+A number which will be the process exit code, when the process either
+exits gracefully, or is exited via `process.exit()` without specifying
+a code.
+
+Specifying a code to `process.exit(code)` will override any previous
+setting of `process.exitCode`.
+
+
 ## process.getgid()
+
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
 
 Gets the group identity of the process. (See getgid(2).)
 This is the numerical group id, not the group name.
 
-    console.log('Current gid: ' + process.getgid());
+    if (process.getgid) {
+      console.log('Current gid: ' + process.getgid());
+    }
 
 
 ## process.setgid(id)
+
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
 
 Sets the group identity of the process. (See setgid(2).)  This accepts either
 a numerical ID or a groupname string. If a groupname is specified, this method
 blocks while resolving it to a numerical ID.
 
-    console.log('Current gid: ' + process.getgid());
-    try {
-      process.setgid(501);
-      console.log('New gid: ' + process.getgid());
-    }
-    catch (err) {
-      console.log('Failed to set gid: ' + err);
+    if (process.getgid && process.setgid) {
+      console.log('Current gid: ' + process.getgid());
+      try {
+        process.setgid(501);
+        console.log('New gid: ' + process.getgid());
+      }
+      catch (err) {
+        console.log('Failed to set gid: ' + err);
+      }
     }
 
 
 ## process.getuid()
 
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
+
 Gets the user identity of the process. (See getuid(2).)
 This is the numerical userid, not the username.
 
-    console.log('Current uid: ' + process.getuid());
+    if (process.getuid) {
+      console.log('Current uid: ' + process.getuid());
+    }
 
 
 ## process.setuid(id)
+
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
 
 Sets the user identity of the process. (See setuid(2).)  This accepts either
 a numerical ID or a username string.  If a username is specified, this method
 blocks while resolving it to a numerical ID.
 
-    console.log('Current uid: ' + process.getuid());
-    try {
-      process.setuid(501);
-      console.log('New uid: ' + process.getuid());
+    if (process.getuid && process.setuid) {
+      console.log('Current uid: ' + process.getuid());
+      try {
+        process.setuid(501);
+        console.log('New uid: ' + process.getuid());
+      }
+      catch (err) {
+        console.log('Failed to set uid: ' + err);
+      }
     }
-    catch (err) {
-      console.log('Failed to set uid: ' + err);
-    }
+
+
+## process.getgroups()
+
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
+
+Returns an array with the supplementary group IDs. POSIX leaves it unspecified
+if the effective group ID is included but node.js ensures it always is.
+
+
+## process.setgroups(groups)
+
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
+
+Sets the supplementary group IDs. This is a privileged operation, meaning you
+need to be root or have the CAP_SETGID capability.
+
+The list can contain group IDs, group names or both.
+
+
+## process.initgroups(user, extra_group)
+
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
+
+Reads /etc/group and initializes the group access list, using all groups of
+which the user is a member. This is a privileged operation, meaning you need
+to be root or have the CAP_SETGID capability.
+
+`user` is a user name or user ID. `extra_group` is a group name or group ID.
+
+Some care needs to be taken when dropping privileges. Example:
+
+    console.log(process.getgroups());         // [ 0 ]
+    process.initgroups('bnoordhuis', 1000);   // switch user
+    console.log(process.getgroups());         // [ 27, 30, 46, 1000, 0 ]
+    process.setgid(1000);                     // drop root gid
+    console.log(process.getgroups());         // [ 27, 30, 46, 1000 ]
 
 
 ## process.version
@@ -248,13 +409,16 @@ A property exposing version strings of node and its dependencies.
 
     console.log(process.versions);
 
-Will output:
+Will print something like:
 
-    { node: '0.4.12',
-      v8: '3.1.8.26',
-      ares: '1.7.4',
-      ev: '4.4',
-      openssl: '1.0.0e-fips' }
+    { http_parser: '1.0',
+      node: '0.10.4',
+      v8: '3.14.5.8',
+      ares: '1.9.0-DEV',
+      uv: '0.10.3',
+      zlib: '1.2.3',
+      modules: '11',
+      openssl: '1.0.1e' }
 
 ## process.config
 
@@ -273,29 +437,24 @@ An example of the possible output looks like:
       variables:
        { host_arch: 'x64',
          node_install_npm: 'true',
-         node_install_waf: 'true',
          node_prefix: '',
+         node_shared_cares: 'false',
+         node_shared_http_parser: 'false',
+         node_shared_libuv: 'false',
          node_shared_v8: 'false',
          node_shared_zlib: 'false',
          node_use_dtrace: 'false',
          node_use_openssl: 'true',
-         node_use_system_openssl: 'false',
+         node_shared_openssl: 'false',
          strict_aliasing: 'true',
          target_arch: 'x64',
          v8_use_snapshot: 'true' } }
-
-## process.installPrefix
-
-A compiled-in property that exposes `NODE_PREFIX`.
-
-    console.log('Prefix: ' + process.installPrefix);
-
 
 ## process.kill(pid, [signal])
 
 Send a signal to a process. `pid` is the process id and `signal` is the
 string describing the signal to send.  Signal names are strings like
-'SIGINT' or 'SIGUSR1'.  If omitted, the signal will be 'SIGTERM'.
+'SIGINT' or 'SIGHUP'.  If omitted, the signal will be 'SIGTERM'.
 See kill(2) for more information.
 
 Note that just because the name of this function is `process.kill`, it is
@@ -304,17 +463,19 @@ may do something other than kill the target process.
 
 Example of sending a signal to yourself:
 
-    process.on('SIGHUP', function () {
+    process.on('SIGHUP', function() {
       console.log('Got SIGHUP signal.');
     });
 
-    setTimeout(function () {
+    setTimeout(function() {
       console.log('Exiting.');
       process.exit(0);
     }, 100);
 
     process.kill(process.pid, 'SIGHUP');
 
+Note: SIGUSR1 is reserved by node.js.  It can be used to kickstart the
+debugger.
 
 ## process.pid
 
@@ -322,9 +483,20 @@ The PID of the process.
 
     console.log('This process is pid ' + process.pid);
 
+
 ## process.title
 
 Getter/setter to set what is displayed in 'ps'.
+
+When used as a setter, the maximum length is platform-specific and probably
+short.
+
+On Linux and OS X, it's limited to the size of the binary name plus the
+length of the command line arguments because it overwrites the argv memory.
+
+v0.8 allowed for longer process title strings by also overwriting the environ
+memory but that was potentially insecure/confusing in some (rather obscure)
+cases.
 
 
 ## process.arch
@@ -336,7 +508,8 @@ What processor architecture you're running on: `'arm'`, `'ia32'`, or `'x64'`.
 
 ## process.platform
 
-What platform you're running on. `'linux2'`, `'darwin'`, etc.
+What platform you're running on:
+`'darwin'`, `'freebsd'`, `'linux'`, `'sunos'` or `'win32'`
 
     console.log('This platform is ' + process.platform);
 
@@ -361,14 +534,79 @@ This will generate:
 
 ## process.nextTick(callback)
 
-On the next loop around the event loop call this callback.
-This is *not* a simple alias to `setTimeout(fn, 0)`, it's much more
-efficient.
+* `callback` {Function}
 
-    process.nextTick(function () {
+Once the current event loop turn runs to completion, call the callback
+function.
+
+This is *not* a simple alias to `setTimeout(fn, 0)`, it's much more
+efficient.  It runs before any additional I/O events (including
+timers) fire in subsequent ticks of the event loop.
+
+    console.log('start');
+    process.nextTick(function() {
       console.log('nextTick callback');
     });
+    console.log('scheduled');
+    // Output:
+    // start
+    // scheduled
+    // nextTick callback
 
+This is important in developing APIs where you want to give the user the
+chance to assign event handlers after an object has been constructed,
+but before any I/O has occurred.
+
+    function MyThing(options) {
+      this.setupOptions(options);
+
+      process.nextTick(function() {
+        this.startDoingStuff();
+      }.bind(this));
+    }
+
+    var thing = new MyThing();
+    thing.getReadyForStuff();
+
+    // thing.startDoingStuff() gets called now, not before.
+
+It is very important for APIs to be either 100% synchronous or 100%
+asynchronous.  Consider this example:
+
+    // WARNING!  DO NOT USE!  BAD UNSAFE HAZARD!
+    function maybeSync(arg, cb) {
+      if (arg) {
+        cb();
+        return;
+      }
+
+      fs.stat('file', cb);
+    }
+
+This API is hazardous.  If you do this:
+
+    maybeSync(true, function() {
+      foo();
+    });
+    bar();
+
+then it's not clear whether `foo()` or `bar()` will be called first.
+
+This approach is much better:
+
+    function definitelyAsync(arg, cb) {
+      if (arg) {
+        process.nextTick(cb);
+        return;
+      }
+
+      fs.stat('file', cb);
+    }
+
+Note: the nextTick queue is completely drained on each pass of the
+event loop **before** additional I/O is processed.  As a result,
+recursively setting nextTick callbacks will block any I/O from
+happening, just like a `while(true);` loop.
 
 ## process.umask([mask])
 
@@ -398,13 +636,229 @@ primary use is for measuring performance between intervals.
 You may pass in the result of a previous call to `process.hrtime()` to get
 a diff reading, useful for benchmarks and measuring intervals:
 
-    var t = process.hrtime();
-    // [ 1800216, 927643717 ]
+    var time = process.hrtime();
+    // [ 1800216, 25 ]
 
-    setTimeout(function () {
-      t = process.hrtime(t);
-      // [ 1, 6962306 ]
+    setTimeout(function() {
+      var diff = process.hrtime(time);
+      // [ 1, 552 ]
 
-      console.log('benchmark took %d seconds and %d nanoseconds', t[0], t[1]);
-      // benchmark took 1 seconds and 6962306 nanoseconds
+      console.log('benchmark took %d nanoseconds', diff[0] * 1e9 + diff[1]);
+      // benchmark took 1000000527 nanoseconds
     }, 1000);
+
+
+## Async Listeners
+
+<!-- type=misc -->
+
+    Stability: 1 - Experimental
+
+The `AsyncListener` API is the JavaScript interface for the `AsyncWrap`
+class which allows developers to be notified about key events in the
+lifetime of an asynchronous event. Node performs a lot of asynchronous
+events internally, and significant use of this API will have a **dramatic
+performance impact** on your application.
+
+
+## process.createAsyncListener(asyncListener[, callbacksObj[, storageValue]])
+
+* `asyncListener` {Function} callback fired when an asynchronous event is
+instantiated.
+* `callbacksObj` {Object} optional callbacks that will fire at specific
+times in the lifetime of the asynchronous event.
+* `storageValue` {Value} a value that will be passed as the first argument
+when the `asyncListener` callback is run, and to all subsequent callback.
+
+Returns a constructed `AsyncListener` object.
+
+To begin capturing asynchronous events pass the object to
+[`process.addAsyncListener()`][]. The same `AsyncListener` instance can
+only be added once to the active queue, and subsequent attempts to add the
+instance will be ignored.
+
+To stop capturing pass the object to [`process.removeAsyncListener()`][].
+This does _not_ mean the `AsyncListener` previously added will stop
+triggering callbacks. Once attached to an asynchronous event it will
+persist with the lifetime of the asynchronous call stack.
+
+Explanation of function parameters:
+
+`asyncListener(storageValue)`: A `Function` called when an asynchronous
+event is instantiated. If a `Value` is returned then it will be attached
+to the event and overwrite any value that had been passed to
+`process.createAsyncListener()`'s `storageValue` argument. If an initial
+`storageValue` was passed when created, then `asyncListener()` will
+receive that as a function argument.
+
+`callbacksObj`: An `Object` which may contain three optional fields:
+
+* `before(context, storageValue)`: A `Function` that is called immediately
+before the asynchronous callback is about to run. It will be passed both
+the `context` (i.e. `this`) of the calling function and the `storageValue`
+either returned from `asyncListener` or passed during construction (if
+either occurred).
+
+* `after(context, storageValue)`: A `Function` called immediately after
+the asynchronous event's callback has run. Note this will not be called
+if the callback throws and the error is not handled.
+
+* `error(storageValue, error)`: A `Function` called if the event's
+callback threw. If `error` returns `true` then Node will assume the error
+has been properly handled and resume execution normally. When multiple
+`error()` callbacks have been registered, only **one** of those callbacks
+needs to return `true` for `AsyncListener` to accept that the error has
+been handled.
+
+`storageValue`: A `Value` (i.e. anything) that will be, by default,
+attached to all new event instances. This will be overwritten if a `Value`
+is returned by `asyncListener()`.
+
+Here is an example of overwriting the `storageValue`:
+
+    process.createAsyncListener(function listener(value) {
+      // value === true
+      return false;
+    }, {
+      before: function before(context, value) {
+        // value === false
+      }
+    }, true);
+
+**Note:** The [EventEmitter][], while used to emit status of an asynchronous
+event, is not itself asynchronous. So `asyncListener()` will not fire when
+an event is added, and `before`/`after` will not fire when emitted
+callbacks are called.
+
+
+## process.addAsyncListener(asyncListener[, callbacksObj[, storageValue]])
+## process.addAsyncListener(asyncListener)
+
+Returns a constructed `AsyncListener` object and immediately adds it to
+the listening queue to begin capturing asynchronous events.
+
+Function parameters can either be the same as
+[`process.createAsyncListener()`][], or a constructed `AsyncListener`
+object.
+
+Example usage for capturing errors:
+
+    var cntr = 0;
+    var key = process.addAsyncListener(function() {
+      return { uid: cntr++ };
+    }, {
+      before: function onBefore(context, storage) {
+        // Need to remove the listener while logging or will end up
+        // with an infinite call loop.
+        process.removeAsyncListener(key);
+        console.log('uid: %s is about to run', storage.uid);
+        process.addAsyncListener(key);
+      },
+      after: function onAfter(context, storage) {
+        process.removeAsyncListener(key);
+        console.log('uid: %s is about to run', storage.uid);
+        process.addAsyncListener(key);
+      },
+      error: function onError(storage, err) {
+        // Handle known errors
+        if (err.message === 'really, it\'s ok') {
+          process.removeAsyncListener(key);
+          console.log('handled error just threw:');
+          console.log(err.stack);
+          process.addAsyncListener(key);
+          return true;
+        }
+      }
+    });
+
+    process.nextTick(function() {
+      throw new Error('really, it\'s ok');
+    });
+
+    // Output:
+    // uid: 0 is about to run
+    // handled error just threw:
+    // Error: really, it's ok
+    //     at /tmp/test2.js:27:9
+    //     at process._tickCallback (node.js:583:11)
+    //     at Function.Module.runMain (module.js:492:11)
+    //     at startup (node.js:123:16)
+    //     at node.js:1012:3
+
+## process.removeAsyncListener(asyncListener)
+
+Removes the `AsyncListener` from the listening queue.
+
+Removing the `AsyncListener` from the queue does _not_ mean asynchronous
+events called during its execution scope will stop firing callbacks. Once
+attached to an event it will persist for the entire asynchronous call
+stack. For example:
+
+    var key = process.createAsyncListener(function asyncListener() {
+      // To log we must stop listening or we'll enter infinite recursion.
+      process.removeAsyncListener(key);
+      console.log('You summoned me?');
+      process.addAsyncListener(key);
+    });
+
+    // We want to begin capturing async events some time in the future.
+    setTimeout(function() {
+      process.addAsyncListener(key);
+
+      // Perform a few additional async events.
+      setTimeout(function() {
+        setImmediate(function() {
+          process.nextTick(function() { });
+        });
+      });
+
+      // Removing the listener doesn't mean to stop capturing events that
+      // have already been added.
+      process.removeAsyncListener(key);
+    }, 100);
+
+    // Output:
+    // You summoned me?
+    // You summoned me?
+    // You summoned me?
+    // You summoned me?
+
+The fact that we logged 4 asynchronous events is an implementation detail
+of Node's [Timers][].
+
+To stop capturing from a specific asynchronous event stack
+`process.removeAsyncListener()` must be called from within the call
+stack itself. For example:
+
+    var key = process.createAsyncListener(function asyncListener() {
+      // To log we must stop listening or we'll enter infinite recursion.
+      process.removeAsyncListener(key);
+      console.log('You summoned me?');
+      process.addAsyncListener(key);
+    });
+
+    // We want to begin capturing async events some time in the future.
+    setTimeout(function() {
+      process.addAsyncListener(key);
+
+      // Perform a few additional async events.
+      setImmediate(function() {
+        // Stop capturing from this call stack.
+        process.removeAsyncListener(key);
+
+        process.nextTick(function() { });
+      });
+    }, 100);
+
+    // Output:
+    // You summoned me?
+
+The user must be explicit and always pass the `AsyncListener` they wish
+to remove. It is not possible to simply remove all listeners at once.
+
+
+[EventEmitter]: events.html#events_class_events_eventemitter
+[Timers]: timers.html
+[`process.createAsyncListener()`]: #process_process_createasynclistener_asynclistener_callbacksobj_storagevalue
+[`process.addAsyncListener()`]: #process_process_addasynclistener_asynclistener
+[`process.removeAsyncListener()`]: #process_process_removeasynclistener_asynclistener
